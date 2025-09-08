@@ -53,15 +53,15 @@ const Navbar = () => {
 
   // Category icons mapping
   const categoryIcons = {
-    'Electronics & Gadgets': FiSmartphone,
-    'Fashion & Apparel': FiUser,
-    'Health & Beauty': FiHeart,
-    'Home & Living': FiHome,
-    'Sports & Outdoors': FiActivity,
-    'Books & Stationery': FiBook,
-    'Automotive & Industrial': FiTool,
-    'Grocery & Food': FiShoppingBag,
-    'Baby & Kids': FiUsers
+    'Electronics': FiSmartphone,
+    'Fashion': FiUser,
+    'Health': FiHeart,
+    'Home': FiHome,
+    'Sports': FiActivity,
+    'Books': FiBook,
+    'Automotive': FiTool,
+    'Grocery': FiShoppingBag,
+    'Baby': FiUsers
   };
 
   // Close dropdowns when clicking outside
@@ -119,7 +119,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/signup');
     setIsProfileOpen(false);
   };
 
@@ -266,6 +266,16 @@ const Navbar = () => {
                         <FiHeart className="mr-2" size={16} />
                         Wishlist
                       </Link>
+                      {user?.role === 'admin' && (
+                        <Link
+                          to="/admin"
+                          className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <FiSettings className="mr-2" size={16} />
+                          Admin Panel
+                        </Link>
+                      )}
                       <hr className="border-gray-200 dark:border-gray-600" />
                       <button
                         onClick={handleLogout}

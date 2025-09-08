@@ -12,13 +12,11 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor - cookies are automatically sent with requests
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Ensure credentials are included for cookie-based auth
+    config.withCredentials = true;
     return config;
   },
   (error) => {
@@ -31,7 +29,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+      // Clear any stored user data and redirect to login
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
@@ -61,23 +59,28 @@ export const productsAPI = {
     const queryString = new URLSearchParams(params).toString();
     return api.get(`/product?${queryString}`);
   },
-  getProductById: (id) => api.get(`/products/${id}`),
-  addProduct: (formData) => api.post('/products', formData, {
+  getProductById: (id) => api.get(`/product/${id}`),
+  getProductsByCategory: (category, params = {}) => {
+    const queryString = new URLSearchParams({ ...params, category }).toString();
+    return api.get(`/product?${queryString}`);
+  },
+  addProduct: (formData) => api.post('/product', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  updateProduct: (id, formData) => api.put(`/products/${id}`, formData, {
+  updateProduct: (id, formData) => api.put(`/product/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  deleteProduct: (id) => api.delete(`/products/${id}`),
+  deleteProduct: (id) => api.delete(`/product/${id}`),
+  addReview: (productId, reviewData) => api.post(`/product/${productId}/review`, reviewData),
 };
 
 // Categories API
 export const categoriesAPI = {
-  getAllCategories: () => api.get('/categories'),
-  getCategoryById: (id) => api.get(`/categories/${id}`),
-  createCategory: (categoryData) => api.post('/categories', categoryData),
-  updateCategory: (id, categoryData) => api.put(`/categories/${id}`, categoryData),
-  deleteCategory: (id) => api.delete(`/categories/${id}`),
+  getAllCategories: () => api.get('/category'),
+  getCategoryById: (id) => api.get(`/category/${id}`),
+  createCategory: (categoryData) => api.post('/category', categoryData),
+  updateCategory: (id, categoryData) => api.put(`/category/${id}`, categoryData),
+  deleteCategory: (id) => api.delete(`/category/${id}`),
 };
 
 // Cart API
@@ -172,8 +175,8 @@ export const getPlaceholderImage = (category = 'general') => {
   };
 
   // Map category names to placeholder keys
-  const categoryKey = category.toLowerCase().includes('electronics') ? 'electronics' :
-                     category.toLowerCase().includes('fashion') ? 'fashion' :
+  const categoryKey = category.toLowerCase().includes('electronics') || category.toLowerCase().includes('gadgets') ? 'electronics' :
+                     category.toLowerCase().includes('fashion') || category.toLowerCase().includes('apparel') ? 'fashion' :
                      category.toLowerCase().includes('health') || category.toLowerCase().includes('beauty') ? 'health' :
                      category.toLowerCase().includes('home') || category.toLowerCase().includes('living') ? 'home' :
                      category.toLowerCase().includes('sports') || category.toLowerCase().includes('outdoor') ? 'sports' :
@@ -213,5 +216,25 @@ export const handleApiError = (error) => {
     return error.message || 'Something went wrong';
   }
 };
+
+// Admin API
+export const adminAPI = {
+  getDashboardStats: () => api.get('/admin/dashboard'),
+  getAllProducts: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return api.get(`/admin/products?${queryString}`);
+  },
+  getAllUsers: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return api.get(`/admin/users?${queryString}`);
+  },
+  updateUserRole: (userId, roleData) => api.patch(`/admin/users/${userId}/role`, roleData),
+  toggleUserStatus: (userId) => api.patch(`/admin/users/${userId}/toggle-status`),
+  getCategories: () => api.get('/admin/categories'),
+  bulkUpdateProducts: (productIds, updates) => api.patch('/admin/products/bulk-update', { productIds, updates }),
+};
+
+// Product API (alias for backward compatibility)
+export const productAPI = productsAPI;
 
 export default api;

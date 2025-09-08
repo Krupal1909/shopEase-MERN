@@ -16,6 +16,7 @@ const categoryRoute = require("./routes/category/category.route");
 const orderRoute = require("./routes/order/order.route")
 const paymentRoutes = require("./routes/razorpay/razorpay.route");
 const wishlistRoute = require("./routes/wishlist/wishlist.route")
+const adminRoute = require("./routes/admin/admin.route")
 const app = express();
 
 // Middleware
@@ -41,6 +42,7 @@ app.use("/api/v1/cart", cartRoute);
 app.use("/api/v1/order", orderRoute);
 app.use("/api/v1/razorpay", paymentRoutes)
 app.use("/api/v1/wishlist", wishlistRoute)
+app.use("/api/v1/admin", adminRoute)
 
 
 // Test route

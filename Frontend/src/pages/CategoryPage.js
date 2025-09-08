@@ -71,7 +71,7 @@ const CategoryPage = () => {
         }
       });
 
-      const response = await productsAPI.getProductsByCategory(categoryDisplayName, params);
+      const response = await productsAPI.getAllProducts(params);
       setProducts(response.data.products || []);
       setTotalProducts(response.data.totalProducts || 0);
       

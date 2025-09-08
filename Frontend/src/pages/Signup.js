@@ -4,9 +4,9 @@ import { useApp } from '../context/AppContext';
 import { authAPI } from '../services/api';
 import { FiEye, FiEyeOff, FiMail, FiLock, FiUser, FiCamera, FiUpload } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
+
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../config/firebase';
-
 const Signup = () => {
   const navigate = useNavigate();
   const { login, loading, setLoading } = useApp();
@@ -63,34 +63,55 @@ const Signup = () => {
     }
   };
 
-  const handleGoogleSignup = async () => {
-    try {
-      setLoading(true);
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      // Create user data for backend
-      const userData = {
-        name: user.displayName,
-        email: user.email,
-        googleId: user.uid,
-        avatar: user.photoURL
-      };
-      
-      const response = await authAPI.googleAuth(userData);
-      const { user: backendUser, token } = response.data;
-      
-      login(backendUser, token);
-      toast.success('Account created successfully with Google!');
-      navigate('/');
-    } catch (error) {
-      const message = error.response?.data?.message || 'Google signup failed';
-      toast.error(message);
-    } finally {
-      setLoading(false);
+const handleGoogleSignup = async () => {
+  try {
+    setLoading(true);
+
+    const provider = new GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+    
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    if (!user.email || !user.displayName) {
+      throw new Error('Google account must have email and name');
     }
-  };
+
+    const userData = {
+      name: user.displayName,
+      email: user.email,
+      googleId: user.uid,
+      avatar: user.photoURL,
+    };
+
+    const response = await authAPI.googleAuth(userData);
+    const { user: backendUser, token } = response.data;
+
+    login(backendUser, token);
+    toast.success("Account created successfully with Google!");
+    navigate("/");
+  } catch (error) {
+    console.error('Google signup error:', error);
+    let message = 'Google signup failed';
+    
+    if (error.code === 'auth/popup-closed-by-user') {
+      message = 'Signup cancelled';
+    } else if (error.code === 'auth/popup-blocked') {
+      message = 'Popup blocked. Please allow popups and try again';
+    } else if (error.code === 'auth/network-request-failed') {
+      message = 'Network error. Please check your connection';
+    } else if (error.code === 'auth/account-exists-with-different-credential') {
+      message = 'An account already exists with this email';
+    } else if (error.response?.data?.message) {
+      message = error.response.data.message;
+    }
+    
+    toast.error(message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const validateForm = () => {
     const newErrors = {};

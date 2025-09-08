@@ -59,8 +59,15 @@ const Login = () => {
     try {
       setLoading(true);
       const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+      
+      if (!user.email || !user.displayName) {
+        throw new Error('Google account must have email and name');
+      }
       
       // Create user data for backend
       const userData = {
@@ -77,7 +84,19 @@ const Login = () => {
       toast.success('Login successful with Google!');
       navigate(from, { replace: true });
     } catch (error) {
-      const message = error.response?.data?.message || 'Google login failed';
+      console.error('Google login error:', error);
+      let message = 'Google login failed';
+      
+      if (error.code === 'auth/popup-closed-by-user') {
+        message = 'Login cancelled';
+      } else if (error.code === 'auth/popup-blocked') {
+        message = 'Popup blocked. Please allow popups and try again';
+      } else if (error.code === 'auth/network-request-failed') {
+        message = 'Network error. Please check your connection';
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      }
+      
       toast.error(message);
     } finally {
       setLoading(false);

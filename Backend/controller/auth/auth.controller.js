@@ -5,6 +5,7 @@ const catchAsyncErrors = require("../../middleware/catchAsyncError");
 const ErrorHandler = require("../../utills/ErrorHandler");
 const cloudinary = require("cloudinary").v2;
 
+//register user
 const registerUser = async (req, res, next) => {
   try {
     const { name, email, password, role, googleId } = req.body;
@@ -131,7 +132,6 @@ const registerUser = async (req, res, next) => {
     next(new ErrorHandler(error.message || "Something went wrong", 500));
   }
 };
-
 
 // Login user
 const loginUser = catchAsyncErrors(async (req, res, next) => {
@@ -271,6 +271,11 @@ const googleAuth = catchAsyncErrors(async (req, res, next) => {
   const { name, email, googleId, avatar } = req.body;
 
   try {
+    // Validate required fields
+    if (!name || !email || !googleId) {
+      return next(new ErrorHandler("Name, email, and Google ID are required", 400));
+    }
+
     // Check if user already exists
     let user = await User.findOne({ email });
 
@@ -282,18 +287,23 @@ const googleAuth = catchAsyncErrors(async (req, res, next) => {
         if (avatar && !user.avatar?.url) {
           user.avatar = { public_id: null, url: avatar };
         }
-        await user.save();
+        user.isActive = true; // Activate user when linking Google
+        await user.save({ validateBeforeSave: false });
       }
     } else {
-      // Create new user
-      user = await User.create({
+      // Create new user - explicitly set password as undefined for Google users
+      const userData = {
         name,
         email,
         googleId,
         avatar: avatar ? { public_id: null, url: avatar } : null,
         isActive: true, // Auto-activate Google users
         role: 'user',
-      });
+        password: undefined // Explicitly set to undefined for Google users
+      };
+      
+      user = new User(userData);
+      await user.save({ validateBeforeSave: false });
     }
 
     // Generate token

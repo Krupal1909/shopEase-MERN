@@ -18,6 +18,12 @@ import Wishlist from './pages/Wishlist';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentFailure from './pages/PaymentFailure';
 import NotFound from './pages/NotFound';
+import AdminLayout from './components/admin/AdminLayout';
+import AdminDashboard from './components/admin/AdminDashboard';
+import ProductManagement from './components/admin/ProductManagement';
+import UserManagement from './components/admin/UserManagement';
+import AdminAnalytics from './components/admin/AdminAnalytics';
+import AdminSettings from './components/admin/AdminSettings';
 
 function App() {
   const { darkMode } = useApp();
@@ -41,6 +47,17 @@ function App() {
             <Route path="/wishlist" element={<Wishlist />} />
             <Route path="/payment/success" element={<PaymentSuccess />} />
             <Route path="/payment/failure" element={<PaymentFailure />} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="products" element={<ProductManagement />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route index element={<AdminDashboard />} />
+            </Route>
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

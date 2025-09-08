@@ -4,6 +4,8 @@ import { useApp } from '../context/AppContext';
 import { HeroCarousel, ProductCarousel } from '../components/common/Carousel';
 import ProductCard from '../components/common/ProductCard';
 import Loader, { ProductGridSkeleton } from '../components/common/Loader';
+import HomeLivingHero from '../components/sections/HomeLivingHero';
+import HomeLivingShowcase from '../components/sections/HomeLivingShowcase';
 import { productsAPI } from '../services/api';
 import { 
   FiTruck, 
@@ -35,35 +37,35 @@ const Home = () => {
       subtitle: "Up to 70% off on smartphones, laptops & more",
       primaryButton: "Shop Now",
       secondaryButton: "View Deals",
-      image: "/api/placeholder/500/400"
+      image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400&h=400&fit=crop&crop=center"
     },
     {
       title: "Fashion Forward",
       subtitle: "Latest trends in clothing & accessories",
       primaryButton: "Explore Fashion",
       secondaryButton: "New Arrivals",
-      image: "/api/placeholder/500/400"
+      image: "https://images.unsplash.com/photo-1532453288672-3a27e9be9efd?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTZ8fGNsb3RoaW5nfGVufDB8fDB8fHww"
     },
     {
       title: "Home & Living",
       subtitle: "Transform your space with our collection",
       primaryButton: "Shop Home",
       secondaryButton: "Decor Ideas",
-      image: "/api/placeholder/500/400"
+      image: "https://images.unsplash.com/photo-1618220179428-22790b461013?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OXx8aG9tZXxlbnwwfHwwfHx8MA%3D%3D"
     }
   ];
 
   // Category icons mapping
   const categoryIcons = {
-    'Electronics & Gadgets': FiSmartphone,
-    'Fashion & Apparel': FiUser,
-    'Health & Beauty': FiHeart,
-    'Home & Living': FiHome,
-    'Sports & Outdoors': FiActivity,
-    'Books & Stationery': FiBook,
-    'Automotive & Industrial': FiTool,
-    'Grocery & Food': FiShoppingBag,
-    'Baby & Kids': FiUsers
+    'Electronics': FiSmartphone,
+    'Fashion': FiUser,
+    'Health': FiHeart,
+    'Home': FiHome,
+    'Sports': FiActivity,
+    'Books': FiBook,
+    'Automotive': FiTool,
+    'Grocery': FiShoppingBag,
+    'Baby': FiUsers
   };
 
   // Load products on component mount
@@ -107,10 +109,11 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Hero Section */}
-      <section>
-        <HeroCarousel slides={heroSlides} />
-      </section>
+      {/* Enhanced Home & Living Hero Section */}
+      <HomeLivingHero />
+
+      {/* Home & Living Showcase Section */}
+      <HomeLivingShowcase />
 
       {/* Features Section */}
       <section className="py-12 bg-white dark:bg-gray-800">
