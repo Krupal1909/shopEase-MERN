@@ -2,8 +2,12 @@ const Product = require("../../models/product/product.model");
 const catchAsyncErrors = require("../../middleware/catchAsyncError");
 const ErrorHandler = require("../../utills/ErrorHandler");
 const cloudinary = require("../../utills/cloudinary");
+const productAggregatorService = require("../../services/productAggregatorService");
+const externalApiService = require("../../services/externalApiService");
+const enhancedProductAggregator = require("../../services/EnhancedProductAggregator");
+const unlimitedProductService = require("../../services/UnlimitedProductService");
 
-// Get all products with filtering, sorting, and pagination
+// Get unlimited products with dynamic loading (Enhanced with multiple APIs)
 const getAllProducts = catchAsyncErrors(async (req, res, next) => {
   const {
     keyword,
@@ -13,12 +17,58 @@ const getAllProducts = catchAsyncErrors(async (req, res, next) => {
     maxPrice,
     ratings,
     page = 1,
-    limit = 10,
-    sortBy = "createdAt",
+    limit = 50, // Increased default limit for unlimited products
+    sortBy = "relevance",
     sortOrder = "desc",
+    sources = "amazon,ebay,walmart,local", // Multiple sources for unlimited products
+    realTime = "true", // Default to real-time for unlimited experience
+    minRating = 0,
+    includeLocal = "true",
+    realTimeOnly = "false"
   } = req.query;
 
-  // Build query object
+  // Use enhanced aggregator for unlimited products
+  if (realTime === "true") {
+    try {
+      const sourcesArray = sources.split(",").map(s => s.trim());
+      
+      const unlimitedResults = await enhancedProductAggregator.getInfiniteProducts({
+        query: keyword,
+        category: category && category !== "All" ? category : "",
+        page: Number(page),
+        limit: Number(limit),
+        sortBy: sortBy === "createdAt" ? "relevance" : sortBy,
+        priceRange: {
+          min: minPrice ? Number(minPrice) : undefined,
+          max: maxPrice ? Number(maxPrice) : undefined
+        },
+        sources: sourcesArray,
+        minRating: Number(minRating),
+        includeLocal: includeLocal === "true",
+        realTimeOnly: realTimeOnly === "true",
+        brands: brand ? [brand] : [],
+        availability: true
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Unlimited products fetched successfully",
+        products: unlimitedResults.products,
+        pagination: unlimitedResults.pagination,
+        sources: unlimitedResults.sources,
+        totalCount: unlimitedResults.totalCount,
+        availableCount: unlimitedResults.availableCount,
+        filters: unlimitedResults.filters,
+        isRealTime: true,
+        isUnlimited: true
+      });
+    } catch (error) {
+      console.error('Enhanced aggregator error:', error);
+      // Fallback to local products only
+    }
+  }
+
+  // Fallback to local database query for backward compatibility
   let query = { isActive: true };
 
   // Search by keyword
@@ -31,7 +81,7 @@ const getAllProducts = catchAsyncErrors(async (req, res, next) => {
   }
 
   // Filter by category
-  if (category) {
+  if (category && category !== "All") {
     query.category = { $regex: category, $options: "i" };
   }
 
@@ -79,12 +129,31 @@ const getAllProducts = catchAsyncErrors(async (req, res, next) => {
       hasNextPage: page < totalPages,
       hasPrevPage: page > 1,
     },
+    isRealTime: false
   });
 });
 
-// Get single product by ID
+// Get single product by ID (Enhanced with external API support)
 const getProductById = catchAsyncErrors(async (req, res, next) => {
-  const product = await Product.findById(req.params.id)
+  const { id } = req.params;
+  const { source = "auto" } = req.query;
+
+  // Try to get product from external APIs if source is specified or auto-detected
+  if (source === "amazon" || (source === "auto" && id.length === 10)) {
+    const externalProduct = await productAggregatorService.getProductDetails(id, "amazon");
+    if (externalProduct) {
+      return res.status(200).json({
+        success: true,
+        message: "External product fetched successfully",
+        product: externalProduct,
+        isExternal: true,
+        source: "amazon"
+      });
+    }
+  }
+
+  // Fallback to local database
+  const product = await Product.findById(id)
     .populate("createdBy", "name email")
     .populate("reviews.user", "name avatar");
 
@@ -96,6 +165,8 @@ const getProductById = catchAsyncErrors(async (req, res, next) => {
     success: true,
     message: "Product fetched successfully",
     product,
+    isExternal: false,
+    source: "local"
   });
 });
 
@@ -416,10 +487,289 @@ const deleteProduct = catchAsyncErrors(async (req, res, next) => {
   }
 });
 
+// Get unlimited trending products from all sources
+const getTrendingProducts = catchAsyncErrors(async (req, res, next) => {
+  const { category = "", limit = 100 } = req.query;
+
+  const trendingResults = await enhancedProductAggregator.getTrendingProducts(category, Number(limit));
+
+  res.status(200).json({
+    success: true,
+    message: "Unlimited trending products fetched successfully",
+    products: trendingResults,
+    totalCount: trendingResults.length,
+    isUnlimited: true
+  });
+});
+
+// Get unlimited products with infinite scroll
+const getInfiniteProducts = catchAsyncErrors(async (req, res, next) => {
+  const {
+    query = '',
+    category = '',
+    page = 1,
+    limit = 50,
+    sources = 'amazon,ebay,walmart,aliexpress,local',
+    sortBy = 'relevance',
+    minPrice,
+    maxPrice,
+    minRating = 0,
+    brands,
+    availability = true
+  } = req.query;
+
+  const sourcesArray = sources.split(',').map(s => s.trim());
+  const brandsArray = brands ? brands.split(',').map(b => b.trim()) : [];
+
+  const results = await enhancedProductAggregator.getInfiniteProducts({
+    query,
+    category: category !== 'All' ? category : '',
+    page: Number(page),
+    limit: Number(limit),
+    sources: sourcesArray,
+    sortBy,
+    priceRange: {
+      min: minPrice ? Number(minPrice) : undefined,
+      max: maxPrice ? Number(maxPrice) : undefined
+    },
+    minRating: Number(minRating),
+    brands: brandsArray,
+    availability: availability === 'true',
+    includeLocal: sourcesArray.includes('local'),
+    realTimeOnly: false
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Infinite products loaded successfully',
+    ...results,
+    isUnlimited: true
+  });
+});
+
+// Advanced search with unlimited results
+const advancedSearch = catchAsyncErrors(async (req, res, next) => {
+  const {
+    query,
+    category = '',
+    page = 1,
+    limit = 50,
+    sources = 'amazon,ebay,walmart,local',
+    sortBy = 'relevance',
+    minPrice,
+    maxPrice,
+    minRating = 0,
+    brands,
+    hasDiscount,
+    freeShipping
+  } = req.query;
+
+  if (!query) {
+    return next(new ErrorHandler('Search query is required', 400));
+  }
+
+  const sourcesArray = sources.split(',').map(s => s.trim());
+  const brandsArray = brands ? brands.split(',').map(b => b.trim()) : [];
+
+  const results = await enhancedProductAggregator.getInfiniteProducts({
+    query,
+    category: category !== 'All' ? category : '',
+    page: Number(page),
+    limit: Number(limit),
+    sources: sourcesArray,
+    sortBy,
+    priceRange: {
+      min: minPrice ? Number(minPrice) : undefined,
+      max: maxPrice ? Number(maxPrice) : undefined
+    },
+    minRating: Number(minRating),
+    brands: brandsArray,
+    hasDiscount: hasDiscount ? hasDiscount === 'true' : null,
+    freeShipping: freeShipping ? freeShipping === 'true' : null,
+    includeLocal: sourcesArray.includes('local')
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Advanced search completed successfully',
+    ...results,
+    isUnlimited: true
+  });
+});
+
+// Get search suggestions
+const getSearchSuggestions = catchAsyncErrors(async (req, res, next) => {
+  const { query, limit = 10 } = req.query;
+
+  if (!query) {
+    return next(new ErrorHandler('Query parameter is required', 400));
+  }
+
+  const suggestions = await enhancedProductAggregator.getSearchSuggestions(query, Number(limit));
+
+  res.status(200).json({
+    success: true,
+    message: 'Search suggestions fetched successfully',
+    suggestions
+  });
+});
+
+// Get price comparison for similar products
+const getPriceComparison = catchAsyncErrors(async (req, res, next) => {
+  const { productTitle, brand = '', category = '' } = req.query;
+
+  if (!productTitle) {
+    return next(new ErrorHandler('Product title is required', 400));
+  }
+
+  const results = await enhancedProductAggregator.getInfiniteProducts({
+    query: `${productTitle} ${brand}`,
+    category,
+    limit: 20,
+    sources: ['amazon', 'ebay', 'walmart', 'local'],
+    sortBy: 'price_low'
+  });
+
+  const priceComparison = results.products.map(product => ({
+    source: product.source,
+    title: product.title,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    discount: product.discount,
+    rating: product.rating,
+    url: product.url,
+    availability: product.availability,
+    priceComparison: product.priceComparison
+  }));
+
+  res.status(200).json({
+    success: true,
+    message: 'Price comparison fetched successfully',
+    products: priceComparison,
+    totalCount: priceComparison.length
+  });
+});
+
+// Get product recommendations
+const getProductRecommendations = catchAsyncErrors(async (req, res, next) => {
+  const { id } = req.params;
+  const { source = "local", limit = 10 } = req.query;
+
+  const recommendations = await productAggregatorService.getRecommendations(id, source, Number(limit));
+
+  res.status(200).json({
+    success: true,
+    message: "Product recommendations fetched successfully",
+    recommendations,
+    totalCount: recommendations.length
+  });
+});
+
+// Search products across all sources
+const searchProducts = catchAsyncErrors(async (req, res, next) => {
+  const { query, category = "", page = 1, limit = 20, sources = "local,amazon" } = req.query;
+
+  if (!query) {
+    return next(new ErrorHandler("Search query is required", 400));
+  }
+
+  const sourcesArray = sources.split(",").map(s => s.trim());
+  
+  const searchResults = await productAggregatorService.getAggregatedProducts({
+    query,
+    category: category !== "All" ? category : "",
+    page: Number(page),
+    limit: Number(limit),
+    sources: sourcesArray
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Search results fetched successfully",
+    products: searchResults.products,
+    pagination: searchResults.pagination,
+    sources: searchResults.sources,
+    totalCount: searchResults.totalCount
+  });
+});
+
+// Get products by category from external APIs
+const getProductsByCategory = catchAsyncErrors(async (req, res, next) => {
+  const { category } = req.params;
+  const { page = 1, limit = 20, sources = "local,amazon" } = req.query;
+
+  const sourcesArray = sources.split(",").map(s => s.trim());
+  
+  const categoryResults = await productAggregatorService.getAggregatedProducts({
+    category,
+    page: Number(page),
+    limit: Number(limit),
+    sources: sourcesArray
+  });
+
+  res.status(200).json({
+    success: true,
+    message: `${category} products fetched successfully`,
+    products: categoryResults.products,
+    pagination: categoryResults.pagination,
+    sources: categoryResults.sources,
+    totalCount: categoryResults.totalCount
+  });
+});
+
+// Clear all API caches
+const clearApiCache = catchAsyncErrors(async (req, res, next) => {
+  // Only allow admin users to clear cache
+  if (req.user.role !== "admin") {
+    return next(new ErrorHandler("Not authorized to perform this action", 403));
+  }
+
+  productAggregatorService.clearCache();
+  enhancedProductAggregator.clearCache();
+  unlimitedProductService.clearCache();
+
+  res.status(200).json({
+    success: true,
+    message: "All API caches cleared successfully"
+  });
+});
+
+// Get comprehensive API service statistics
+const getApiStats = catchAsyncErrors(async (req, res, next) => {
+  // Only allow admin users to view stats
+  if (req.user.role !== "admin") {
+    return next(new ErrorHandler("Not authorized to view this information", 403));
+  }
+
+  const stats = {
+    productAggregator: productAggregatorService.getStats(),
+    enhancedAggregator: enhancedProductAggregator.getStats(),
+    unlimitedService: unlimitedProductService.getCacheStats(),
+    supportedSources: ['amazon', 'ebay', 'walmart', 'aliexpress', 'etsy', 'local'],
+    timestamp: new Date().toISOString()
+  };
+
+  res.status(200).json({
+    success: true,
+    message: "Comprehensive API statistics fetched successfully",
+    stats
+  });
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
   addProduct,
   updateProduct,
   deleteProduct,
+  getTrendingProducts,
+  getProductRecommendations,
+  searchProducts,
+  getProductsByCategory,
+  getInfiniteProducts,
+  advancedSearch,
+  getSearchSuggestions,
+  getPriceComparison,
+  clearApiCache,
+  getApiStats,
 };

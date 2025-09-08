@@ -115,128 +115,136 @@ const applyCoupon = async () => {
 
   const removeCoupon = () => {
     setCouponCode('');
-    setCouponDiscount(0);
     setAppliedCoupon(null);
     toast.success('Coupon removed');
   };
 
   const handlePayment = async () => {
-    if (!validateAddress()) {
-      toast.error('Please fill in all address fields');
-      return;
-    }
+  if (!validateAddress()) {
+    toast.error('Please fill in all address fields');
+    return;
+  }
 
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      // Create order
-      const orderData = {
-        items: cart.map(item => ({
-          product: item.product._id,
-          quantity: item.quantity,
-          price: item.selectedVariant?.price || item.product.discountPrice || item.product.price,
-          variant: item.selectedVariant
-        })),
-        shippingAddress,
-        paymentMethod,
-        subtotal: cartTotal,
-        deliveryFee,
-        couponDiscount,
-        total: finalTotal,
-        appliedCoupon: appliedCoupon?._id
-      };
+    // Create order data
+    const orderData = {
+      items: cart.map(item => ({
+        product: item.product._id,
+        quantity: item.quantity,
+        price: item.selectedVariant?.price || item.product.discountPrice || item.product.price,
+        name: item.product.name || item.product.title,
+        variant: item.selectedVariant
+      })),
+      shippingAddress,
+      paymentMethod,
+      subtotal: cartTotal,
+      deliveryFee,
+      couponDiscount,
+      total: finalTotal,
+      couponCode: appliedCoupon?.code
+    };
 
-      if (paymentMethod === 'cod') {
-        // Cash on Delivery
-        const response = await ordersAPI.createOrder({
+    // Handle Cash on Delivery
+    if (paymentMethod === 'cod') {
+      try {
+        const orderResponse = await ordersAPI.createOrder({
           ...orderData,
-          paymentStatus: 'pending'
+          paymentStatus: 'pending',
+          paymentMethod: 'cod'
         });
-        
+
         clearCart();
-        toast.success('Order placed successfully!');
+        toast.success('Order placed successfully! Pay on delivery.');
         navigate('/payment/success', { 
           state: { 
-            orderId: response.data.order._id,
+            orderId: orderResponse.data.order._id,
             paymentMethod: 'cod'
           }
         });
-      } else {
-        // Razorpay Payment
-        const razorpayResponse = await paymentAPI.createRazorpayOrder(finalTotal);
-        const razorpayOrder = razorpayResponse.data;
+      } catch (error) {
+        console.error('COD Order creation error:', error);
+        const message = error.response?.data?.message || 'Failed to place order';
+        toast.error(message);
+      }
+      return;
+    }
 
-        console.log(process.env.REACT_APP_RAZORPAY_KEY_ID, "key")
-        const options = {
-          key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_RF0Godgrm0egt5',
-          amount: razorpayOrder.amount,
-          currency: razorpayOrder.currency,
-          name: 'ShopEase',
-          description: 'Order Payment',
-          order_id: razorpayOrder.orderId,
-          prefill: {
-            name: user.name,
-            email: user.email,
-            contact: shippingAddress.phone
-          },
-          theme: {
-            color: '#3B82F6'
-          },
-          handler: async (response) => {
-            try {
-              // Verify payment
-              const verifyResponse = await paymentAPI.verifyPayment({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                orderData: orderData 
+    // For online payment, create Razorpay order first
+    if (paymentMethod === 'razorpay') {
+      const razorpayOrder = await paymentAPI.createOrder({
+        amount: finalTotal
+      });
+
+      const options = {
+        key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_RF0Godgrm0egt5',
+        amount: razorpayOrder.data.amount,
+        currency: razorpayOrder.data.currency,
+        name: 'ShopEase',
+        description: 'Order Payment',
+        order_id: razorpayOrder.data.orderId,
+        prefill: {
+          name: user.name,
+          email: user.email,
+          contact: shippingAddress.phone
+        },
+        theme: {
+          color: '#3B82F6'
+        },
+        handler: async (response) => {
+          try {
+            // Verify payment
+            const verifyResponse = await paymentAPI.verifyPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            if (verifyResponse.data.success) {
+              // Create order after successful payment
+              const orderResponse = await ordersAPI.createOrder({
+                ...orderData,
+                paymentStatus: 'completed',
+                paymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id
               });
 
-              if (verifyResponse.data.success) {
-                // Create order after successful payment
-                const orderResponse = await ordersAPI.createOrder({
-                  ...orderData,
-                  paymentStatus: 'completed',
-                  paymentId: response.razorpay_payment_id,
-                  razorpayOrderId: response.razorpay_order_id
-                });
-
-                clearCart();
-                toast.success('Payment successful!');
-                navigate('/payment/success', { 
-                  state: { 
-                    orderId: orderResponse.data.order._id,
-                    paymentId: response.razorpay_payment_id
-                  }
-                });
-              } else {
-                throw new Error('Payment verification failed');
-              }
-            } catch (error) {
-              console.error('Payment verification error:', error);
-              toast.error('Payment verification failed');
-              navigate('/payment/failure');
+              clearCart();
+              toast.success('Payment successful!');
+              navigate('/payment/success', { 
+                state: { 
+                  orderId: orderResponse.data.order._id,
+                  paymentId: response.razorpay_payment_id
+                }
+              });
+            } else {
+              throw new Error('Payment verification failed');
             }
-          },
-          modal: {
-            ondismiss: () => {
-              toast.error('Payment cancelled');
-            }
+          } catch (error) {
+            console.error('Payment verification error:', error);
+            toast.error('Payment verification failed');
+            navigate('/payment/failure');
           }
-        };
+        },
+        modal: {
+          ondismiss: () => {
+            toast.error('Payment cancelled');
+          }
+        }
+      };
 
-        const razorpay = new window.Razorpay(options);
-        razorpay.open();
-      }
-    } catch (error) {
-      console.error('Checkout error:', error);
-      const message = error.response?.data?.message;
-      
-      toast.error(message);
-    } finally {
-      setLoading(false);
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
     }
-  };
+  } catch (error) {
+    console.error('Checkout error:', error);
+    const message = error.response?.data?.message || 'Checkout failed';
+    toast.error(message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const steps = [
     { id: 1, name: 'Shipping Address', completed: currentStep > 1 },

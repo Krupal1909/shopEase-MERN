@@ -6,20 +6,26 @@ const ErrorHandler = require("../../utills/ErrorHandler");
 
 // Create new order
 const createOrder = catchAsyncErrors(async (req, res, next) => {
+  console.log('Create order request body:', JSON.stringify(req.body, null, 2));
 
   let orderItems = [];
   let shippingAddress = {};
 
-  // 🔹 Check if body is already parsed (for JSON requests)
+  // Handle JSON format (direct from frontend)
   if (req.body.items && Array.isArray(req.body.items)) {
-    orderItems = req.body.items;
+    orderItems = req.body.items.map(item => ({
+      product: item.product,
+      quantity: parseInt(item.quantity) || 1,
+      price: parseFloat(item.price) || 0,
+      name: item.name || 'Product',
+      variant: item.variant || null
+    }));
     shippingAddress = req.body.shippingAddress || {};
   } 
-  // 🔹 Parse form data format
+  // Handle form data format (fallback)
   else {
     // Parse items from form data format: items[0][product], items[0][quantity], etc.
     for (const key in req.body) {
-      
       // Parse order items
       if (key.startsWith('items[') && key.includes('][')) {
         const matches = key.match(/items\[(\d+)\]\[(\w+)\]/);
@@ -33,7 +39,6 @@ const createOrder = catchAsyncErrors(async (req, res, next) => {
           orderItems[index][field] = req.body[key];
         }
       }
-      
       // Parse shipping address
       else if (key.startsWith('shippingAddress[')) {
         const matches = key.match(/shippingAddress\[(\w+)\]/);
@@ -47,37 +52,33 @@ const createOrder = catchAsyncErrors(async (req, res, next) => {
         shippingAddress[key] = req.body[key];
       }
     }
+
+    // Format parsed items
+    orderItems = orderItems
+      .filter(item => item && item.product)
+      .map(item => ({
+        product: item.product,
+        quantity: parseInt(item.quantity) || 1,
+        price: parseFloat(item.price) || 0,
+        name: item.name || 'Product'
+      }));
   }
 
+  console.log('Parsed order items:', orderItems);
+  console.log('Parsed shipping address:', shippingAddress);
 
-  // 🔹 If no items found, try alternative parsing
-  if (orderItems.length === 0) {
-    // Try to find items in other possible formats
-    for (const key in req.body) {
-      if (key.includes('product') || key.includes('quantity') || key.includes('price')) {
-      }
-    }
-    return next(new ErrorHandler("No order items found. Please check the request format.", 400));
+  if (!orderItems || orderItems.length === 0) {
+    return next(new ErrorHandler("No order items found. Please ensure cart items are included in the request.", 400));
   }
 
-  // Filter and format order items
-  orderItems = orderItems
-    .filter(item => item && item.product)
-    .map(item => ({
-      product: item.product,
-      quantity: parseInt(item.quantity) || 1,
-      price: parseFloat(item.price) || 0,
-      name: item.name || 'Product'
-    }));
-
-  // 🔹 Extract pricing information
+  // Extract pricing information
   const itemsPrice = parseFloat(req.body.subtotal) || parseFloat(req.body.itemsPrice) || 0;
   const shippingPrice = parseFloat(req.body.deliveryFee) || parseFloat(req.body.shippingPrice) || 0;
   const taxPrice = parseFloat(req.body.taxPrice) || 0;
   const totalPrice = parseFloat(req.body.total) || parseFloat(req.body.totalPrice) || 0;
   const paymentMethod = req.body.paymentMethod || 'cod';
 
-  // 🔹 MAP FIELD NAMES TO MATCH YOUR SCHEMA
+  // Map field names to match schema
   const mappedShippingAddress = {
     address: shippingAddress.street || shippingAddress.address || '',
     city: shippingAddress.city || '',
@@ -87,20 +88,36 @@ const createOrder = catchAsyncErrors(async (req, res, next) => {
     phoneNo: shippingAddress.phone || shippingAddress.phoneNo || ''
   };
 
-
-  if (!orderItems || orderItems.length === 0) {
-    return next(new ErrorHandler("No order items found after processing", 400));
-  }
-
   // 🔹 Validate stock and populate product details
   for (const item of orderItems) {
-    const product = await Product.findById(item.product);
-    if (!product) {
-      return next(new ErrorHandler(`Product not found: ${item.product}`, 404));
+    let product = null;
+    
+    // Try to find product by MongoDB ObjectId first (for local products)
+    if (item.product.match(/^[0-9a-fA-F]{24}$/)) {
+      product = await Product.findById(item.product);
     }
+    
+    // If not found or not a valid ObjectId, it's likely an external product
+    if (!product) {
+      // For external products, we'll use the product data from the cart item
+      // since external products aren't stored in our database
+      console.log(`External product detected: ${item.product}`);
+      
+      // Use the product name and image from the cart item itself
+      if (!item.name) {
+        return next(new ErrorHandler(`Product name missing for external product: ${item.product}`, 400));
+      }
+      
+      // Skip stock validation for external products (assume available)
+      continue;
+    }
+    
+    // For local products, validate stock
     if (product.stock < item.quantity) {
       return next(new ErrorHandler(`Insufficient stock for ${product.name}`, 400));
     }
+    
+    // Update item details with product info
     item.name = product.name;
     if (product.images && product.images.length > 0) {
       item.image = {

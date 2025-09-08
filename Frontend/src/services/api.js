@@ -111,7 +111,7 @@ export const ordersAPI = {
 
 // Payment API
 export const paymentAPI = {
-  createRazorpayOrder: (amount) => api.post('/payment/create-order', { amount }),
+  createOrder: (orderData) => api.post('/payment/create-order', orderData),
   verifyPayment: (paymentData) => api.post('/payment/verify', paymentData),
 };
 

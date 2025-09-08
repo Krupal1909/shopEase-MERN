@@ -77,27 +77,48 @@ const Home = () => {
     try {
       setLoading(true);
       
-      // Load featured products
-      const featuredResponse = await productsAPI.getAllProducts({ 
-        limit: 8, 
-        featured: true 
+      // Load all products first to ensure we have different sets
+      const allProductsResponse = await productsAPI.getAllProducts({ 
+        limit: 50 
       });
-      setFeaturedProducts(featuredResponse.data.products || []);
+      const allProducts = allProductsResponse.data.products || [];
+      
+      if (allProducts.length > 0) {
+        // Shuffle products to ensure randomness
+        const shuffledProducts = [...allProducts].sort(() => Math.random() - 0.5);
+        
+        // Split into different sections with no overlap
+        const featuredCount = Math.min(8, Math.floor(shuffledProducts.length / 3));
+        const trendingCount = Math.min(8, Math.floor(shuffledProducts.length / 3));
+        const newArrivalsCount = Math.min(8, shuffledProducts.length - featuredCount - trendingCount);
+        
+        setFeaturedProducts(shuffledProducts.slice(0, featuredCount));
+        setTrendingProducts(shuffledProducts.slice(featuredCount, featuredCount + trendingCount));
+        setNewArrivals(shuffledProducts.slice(featuredCount + trendingCount, featuredCount + trendingCount + newArrivalsCount));
+      } else {
+        // Fallback: try to load from different categories
+        try {
+          const electronicsResponse = await productsAPI.getAllProducts({ 
+            category: 'Electronics', 
+            limit: 8 
+          });
+          setFeaturedProducts(electronicsResponse.data.products || []);
 
-      // Load trending products
-      const trendingResponse = await productsAPI.getAllProducts({ 
-        limit: 8, 
-        sortBy: 'popularity' 
-      });
-      setTrendingProducts(trendingResponse.data.products || []);
+          const fashionResponse = await productsAPI.getAllProducts({ 
+            category: 'Fashion', 
+            limit: 8 
+          });
+          setTrendingProducts(fashionResponse.data.products || []);
 
-      // Load new arrivals
-      const newArrivalsResponse = await productsAPI.getAllProducts({ 
-        limit: 8, 
-        sortBy: 'createdAt',
-        order: 'desc'
-      });
-      setNewArrivals(newArrivalsResponse.data.products || []);
+          const sportsResponse = await productsAPI.getAllProducts({ 
+            category: 'Sports', 
+            limit: 8 
+          });
+          setNewArrivals(sportsResponse.data.products || []);
+        } catch (fallbackError) {
+          console.error('Fallback loading failed:', fallbackError);
+        }
+      }
 
     } catch (error) {
       console.error('Error loading home data:', error);

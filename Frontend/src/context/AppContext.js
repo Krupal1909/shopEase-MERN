@@ -60,16 +60,12 @@ const appReducer = (state, action) => {
     
     case 'ADD_TO_CART':
       const existingCartItem = state.cart.find(item => 
-        item.product._id === action.payload.product._id && 
-        item.selectedVariant?.size === action.payload.selectedVariant?.size &&
-        item.selectedVariant?.color === action.payload.selectedVariant?.color
+        item.id === action.payload.id
       );
       
       if (existingCartItem) {
         const updatedCart = state.cart.map(item =>
-          item.product._id === action.payload.product._id &&
-          item.selectedVariant?.size === action.payload.selectedVariant?.size &&
-          item.selectedVariant?.color === action.payload.selectedVariant?.color
+          item.id === action.payload.id
             ? { ...item, quantity: item.quantity + action.payload.quantity }
             : item
         );
@@ -203,9 +199,14 @@ export const AppProvider = ({ children }) => {
 
   // Cart helper functions
   const addToCart = (product, quantity = 1, selectedVariant = null) => {
+    // Generate unique ID for both local and external products
+    const productId = product._id || product.externalId || `${product.source}_${product.id}`;
     const cartItem = {
-      id: `${product._id}-${selectedVariant?.size || ''}-${selectedVariant?.color || ''}`,
-      product,
+      id: `${productId}-${selectedVariant?.size || ''}-${selectedVariant?.color || ''}`,
+      product: {
+        ...product,
+        _id: productId // Ensure consistent ID
+      },
       quantity,
       selectedVariant,
       addedAt: new Date().toISOString()
