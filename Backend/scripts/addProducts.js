@@ -110,22 +110,18 @@ const addProducts = async () => {
     // Connect to database
     const MONGO_URL = process.env.MONGO_URL || "mongodb+srv://krupalpatel3571:Krupal%231909@cluster0.xpeoqci.mongodb.net/chat-mern-stack";
     await mongoose.connect(MONGO_URL);
-    console.log("Connected to MongoDB");
 
     // Get admin user
     const admin = await User.findOne({ email: "admin@shopease.com" });
     if (!admin) {
-      console.log("Admin user not found. Please create admin first.");
       process.exit(1);
     }
 
     // Get existing categories
     const existingCategories = await Category.find({});
-    console.log(`Found ${existingCategories.length} existing categories`);
 
     // Add 100 products to each category
     for (const categoryName of categories) {
-      console.log(`Adding products to ${categoryName}...`);
       const templates = productTemplates[categoryName] || productTemplates["Electronics"];
       
       for (let i = 1; i <= 100; i++) {
@@ -173,7 +169,6 @@ const addProducts = async () => {
       console.log(`✅ Completed adding 100 products to ${categoryName}`);
     }
 
-    console.log("🎉 Successfully added 100 products to each category!");
     console.log(`Total products added: ${categories.length * 100}`);
     
     process.exit(0);

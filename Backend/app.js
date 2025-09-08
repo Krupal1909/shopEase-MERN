@@ -5,6 +5,7 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const DbConnect = require("./database/db");
+const expressFormData = require('express-form-data');
 const path = require('path')
 // Routes
 const userRoute = require("./routes/user/user.route");
@@ -27,11 +28,14 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
+app.use(expressFormData.parse({}));
+app.use(expressFormData.format());
+app.use(expressFormData.stream());
+app.use(expressFormData.union());
 // Routes
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/auth", authRoute);
@@ -40,7 +44,7 @@ app.use("/api/v1/coupon", couponRoute);
 app.use("/api/v1/product", productRoute);
 app.use("/api/v1/cart", cartRoute);
 app.use("/api/v1/order", orderRoute);
-app.use("/api/v1/razorpay", paymentRoutes)
+app.use("/api/v1/payment", paymentRoutes)
 app.use("/api/v1/wishlist", wishlistRoute)
 app.use("/api/v1/admin", adminRoute)
 

@@ -140,13 +140,12 @@ const appReducer = (state, action) => {
 export const AppProvider = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Load data from localStorage on app start
+  // Load data from localStorage on app start and verify authentication
   useEffect(() => {
     const savedCart = localStorage.getItem('cart');
     const savedWishlist = localStorage.getItem('wishlist');
     const savedDarkMode = localStorage.getItem('darkMode');
     const savedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
 
     if (savedCart) {
       dispatch({ type: 'SET_CART', payload: JSON.parse(savedCart) });
@@ -160,9 +159,46 @@ export const AppProvider = ({ children }) => {
       dispatch({ type: 'TOGGLE_DARK_MODE' });
     }
 
-    if (savedUser && token) {
-      dispatch({ type: 'SET_USER', payload: JSON.parse(savedUser) });
-    }
+    // Check authentication status by making a request to verify the cookie
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1'}/auth/verify`, {
+          method: 'GET',
+          credentials: 'include', // Include cookies
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.user) {
+            dispatch({ type: 'SET_USER', payload: data.user });
+            localStorage.setItem('user', JSON.stringify(data.user));
+          } else {
+            // Clear invalid user data
+            localStorage.removeItem('user');
+            dispatch({ type: 'SET_USER', payload: null });
+          }
+        } else {
+          // Clear invalid user data
+          localStorage.removeItem('user');
+          dispatch({ type: 'SET_USER', payload: null });
+        }
+      } catch (error) {
+        console.error('Auth verification failed:', error);
+        // If there's a saved user but verification fails, still set it temporarily
+        if (savedUser) {
+          try {
+            dispatch({ type: 'SET_USER', payload: JSON.parse(savedUser) });
+          } catch (e) {
+            localStorage.removeItem('user');
+          }
+        }
+      }
+    };
+
+    verifyAuth();
   }, []);
 
   // Cart helper functions

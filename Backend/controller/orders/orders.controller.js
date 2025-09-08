@@ -6,67 +6,128 @@ const ErrorHandler = require("../../utills/ErrorHandler");
 
 // Create new order
 const createOrder = catchAsyncErrors(async (req, res, next) => {
-  // 🔹 Parse JSON strings first
-  if (req.body.orderItems && typeof req.body.orderItems === "string") {
-    try {
-      req.body.orderItems = JSON.parse(req.body.orderItems);
-    } catch (err) {
-      return next(new ErrorHandler("Invalid orderItems format", 400));
+
+  let orderItems = [];
+  let shippingAddress = {};
+
+  // 🔹 Check if body is already parsed (for JSON requests)
+  if (req.body.items && Array.isArray(req.body.items)) {
+    orderItems = req.body.items;
+    shippingAddress = req.body.shippingAddress || {};
+  } 
+  // 🔹 Parse form data format
+  else {
+    // Parse items from form data format: items[0][product], items[0][quantity], etc.
+    for (const key in req.body) {
+      
+      // Parse order items
+      if (key.startsWith('items[') && key.includes('][')) {
+        const matches = key.match(/items\[(\d+)\]\[(\w+)\]/);
+        if (matches && matches.length === 3) {
+          const index = parseInt(matches[1]);
+          const field = matches[2];
+          
+          if (!orderItems[index]) {
+            orderItems[index] = {};
+          }
+          orderItems[index][field] = req.body[key];
+        }
+      }
+      
+      // Parse shipping address
+      else if (key.startsWith('shippingAddress[')) {
+        const matches = key.match(/shippingAddress\[(\w+)\]/);
+        if (matches && matches.length === 2) {
+          const field = matches[1];
+          shippingAddress[field] = req.body[key];
+        }
+      }
+      // Handle flat shipping address fields (fallback)
+      else if (['name', 'phone', 'street', 'city', 'state', 'zipCode', 'country'].includes(key)) {
+        shippingAddress[key] = req.body[key];
+      }
     }
   }
 
-  if (req.body.shippingAddress && typeof req.body.shippingAddress === "string") {
-    try {
-      req.body.shippingAddress = JSON.parse(req.body.shippingAddress);
-    } catch (err) {
-      return next(new ErrorHandler("Invalid shippingAddress format", 400));
+
+  // 🔹 If no items found, try alternative parsing
+  if (orderItems.length === 0) {
+    // Try to find items in other possible formats
+    for (const key in req.body) {
+      if (key.includes('product') || key.includes('quantity') || key.includes('price')) {
+      }
     }
+    return next(new ErrorHandler("No order items found. Please check the request format.", 400));
   }
 
-  if (req.body.paymentInfo && typeof req.body.paymentInfo === "string") {
-    try {
-      req.body.paymentInfo = JSON.parse(req.body.paymentInfo);
-    } catch (err) {
-      return next(new ErrorHandler("Invalid paymentInfo format", 400));
-    }
-  }
+  // Filter and format order items
+  orderItems = orderItems
+    .filter(item => item && item.product)
+    .map(item => ({
+      product: item.product,
+      quantity: parseInt(item.quantity) || 1,
+      price: parseFloat(item.price) || 0,
+      name: item.name || 'Product'
+    }));
 
-  // 🔹 Now safely destructure
-  const {
-    orderItems,
-    shippingAddress,
-    paymentInfo,
-    itemsPrice,
-    taxPrice,
-    shippingPrice,
-    totalPrice,
-  } = req.body;
+  // 🔹 Extract pricing information
+  const itemsPrice = parseFloat(req.body.subtotal) || parseFloat(req.body.itemsPrice) || 0;
+  const shippingPrice = parseFloat(req.body.deliveryFee) || parseFloat(req.body.shippingPrice) || 0;
+  const taxPrice = parseFloat(req.body.taxPrice) || 0;
+  const totalPrice = parseFloat(req.body.total) || parseFloat(req.body.totalPrice) || 0;
+  const paymentMethod = req.body.paymentMethod || 'cod';
+
+  // 🔹 MAP FIELD NAMES TO MATCH YOUR SCHEMA
+  const mappedShippingAddress = {
+    address: shippingAddress.street || shippingAddress.address || '',
+    city: shippingAddress.city || '',
+    state: shippingAddress.state || '',
+    pinCode: shippingAddress.zipCode || shippingAddress.pinCode || '',
+    country: shippingAddress.country || '',
+    phoneNo: shippingAddress.phone || shippingAddress.phoneNo || ''
+  };
+
 
   if (!orderItems || orderItems.length === 0) {
-    return next(new ErrorHandler("No order items found", 400));
+    return next(new ErrorHandler("No order items found after processing", 400));
   }
 
-  // 🔹 Validate stock
+  // 🔹 Validate stock and populate product details
   for (const item of orderItems) {
     const product = await Product.findById(item.product);
     if (!product) {
       return next(new ErrorHandler(`Product not found: ${item.product}`, 404));
     }
     if (product.stock < item.quantity) {
-      return next(new ErrorHandler(`Insufficient stock for ${item.name}`, 400));
+      return next(new ErrorHandler(`Insufficient stock for ${product.name}`, 400));
+    }
+    item.name = product.name;
+    if (product.images && product.images.length > 0) {
+      item.image = {
+        public_id: product.images[0].public_id,
+        url: product.images[0].url
+      };
     }
   }
 
-  // 🔹 Create order
+  // 🔹 Generate payment ID for COD orders
+  const paymentId = req.body.paymentId || `cod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  // 🔹 Create order with EXACT schema field names
   const order = await Order.create({
     user: req.user.id,
-    orderItems,
-    shippingAddress,
-    paymentInfo,
-    itemsPrice,
-    taxPrice,
-    shippingPrice,
-    totalPrice,
+    orderItems: orderItems, // Note: your schema uses 'orderItems' not 'items'
+    shippingAddress: mappedShippingAddress,
+    paymentInfo: {
+      id: paymentId,
+      status: req.body.paymentStatus || 'pending',
+      method: paymentMethod
+    },
+    itemsPrice: itemsPrice,
+    taxPrice: taxPrice,
+    shippingPrice: shippingPrice,
+    totalPrice: totalPrice,
+    orderStatus: "Processing"
   });
 
   // 🔹 Update stock

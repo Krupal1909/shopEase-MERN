@@ -337,6 +337,15 @@ const googleAuth = catchAsyncErrors(async (req, res, next) => {
   }
 });
 
+// Verify authentication status
+const verifyAuth = catchAsyncErrors(async (req, res, next) => {
+  res.status(200).json({
+    success: true,
+    message: "User is authenticated",
+    user: req.user
+  });
+});
+
 module.exports = {
   forgotPassword,
   verifyEmail,
@@ -344,4 +353,5 @@ module.exports = {
   loginUser,
   registerUser,
   googleAuth,
+  verifyAuth,
 };

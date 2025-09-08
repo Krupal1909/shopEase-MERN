@@ -382,21 +382,22 @@ const ProductModal = ({ isOpen, onClose, onSuccess, product, categories, isEdit 
   });
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [useDefaultImages, setUseDefaultImages] = useState(false);
 
   useEffect(() => {
-    if (isEdit && product) {
+    if (product) {
       setFormData({
         name: product.name || '',
-        description: product.description || '',
+        brand: product.brand || '',
+        category: product.category || '',
+        stock: product.stock || '',
         price: product.price || '',
         discountPrice: product.discountPrice || '',
-        category: product.category || '',
-        brand: product.brand || '',
-        stock: product.stock || '',
+        description: product.description || '',
         tags: product.tags ? product.tags.join(', ') : ''
       });
     }
-  }, [isEdit, product]);
+  }, [product]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -429,10 +430,14 @@ const ProductModal = ({ isOpen, onClose, onSuccess, product, categories, isEdit 
         }
       });
 
-      // Add images
-      images.forEach(image => {
-        submitData.append('images', image);
-      });
+      // Add images or use default flag
+      if (useDefaultImages) {
+        submitData.append('useDefaultImages', 'true');
+      } else {
+        images.forEach(image => {
+          submitData.append('images', image);
+        });
+      }
 
       if (isEdit) {
         await productAPI.updateProduct(product._id, submitData);
@@ -592,19 +597,41 @@ const ProductModal = ({ isOpen, onClose, onSuccess, product, categories, isEdit 
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Product Images {!isEdit && '*'}
+              Product Images {!isEdit && !useDefaultImages && '*'}
             </label>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleImageChange}
-              required={!isEdit}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <p className="text-sm text-gray-500 mt-1">
-              You can select multiple images (max 5)
-            </p>
+            
+            <div className="space-y-3">
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="useDefaultImages"
+                  checked={useDefaultImages}
+                  onChange={(e) => setUseDefaultImages(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="useDefaultImages" className="text-sm text-gray-700">
+                  Use category-appropriate default images
+                </label>
+              </div>
+              
+              {!useDefaultImages && (
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  required={!isEdit}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
+              
+              <p className="text-sm text-gray-500">
+                {useDefaultImages 
+                  ? "Default images will be used based on the selected category"
+                  : "You can select multiple images (max 5) or use default category images"
+                }
+              </p>
+            </div>
           </div>
 
           <div className="flex justify-end space-x-4 pt-4">

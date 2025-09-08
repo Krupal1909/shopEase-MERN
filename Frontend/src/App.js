@@ -24,6 +24,7 @@ import ProductManagement from './components/admin/ProductManagement';
 import UserManagement from './components/admin/UserManagement';
 import AdminAnalytics from './components/admin/AdminAnalytics';
 import AdminSettings from './components/admin/AdminSettings';
+import AIChatbot from './components/chat/AIChatbot';
 
 function App() {
   const { darkMode } = useApp();
@@ -63,6 +64,7 @@ function App() {
         </main>
         <Footer />
         <ScrollToTop />
+        <AIChatbot />
       </div>
     </div>
   );

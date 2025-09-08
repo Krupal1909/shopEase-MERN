@@ -146,16 +146,18 @@ const updateCoupon = catchAsyncErrors(async (req, res, next) => {
     coupon,
   });
 });
-
 const applyCoupon = catchAsyncErrors(async (req, res, next) => {
-  const { couponCode } = req.body;
+  let { couponCode, cartItems } = req.body;
 
-  if (!couponCode) {
-    return next(new ErrorHandler("Coupon code is required", 400));
+  // Validate couponCode
+  if (!couponCode || typeof couponCode !== "string") {
+    return next(new ErrorHandler("Coupon code must be a non-empty string", 400));
   }
 
+  couponCode = couponCode.trim().toUpperCase();
+
   // Find coupon
-  const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
+  const coupon = await Coupon.findOne({ code: couponCode });
   if (!coupon) {
     return next(new ErrorHandler("Invalid coupon code", 404));
   }
@@ -169,25 +171,45 @@ const applyCoupon = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Coupon usage limit exceeded", 400));
   }
 
-  // Get user cart
-  const cart = await cartModel.findOne({ user: req.user.id }).populate({
-    path: "items.product",
-    select: "price",
-  });
-  if (!cart || cart.items.length === 0) {
-    return next(new ErrorHandler("Cart is empty", 400));
-  }
+  // If cartItems are provided (from frontend), use them to calculate total
+  let totalPrice = 0;
+  
+  if (cartItems && cartItems.length > 0) {
+    // Calculate total from provided cart items
+    totalPrice = cartItems.reduce((sum, item) => {
+      const price = item.selectedVariant?.price || item.product.discountPrice || item.product.price;
+      return sum + (price * item.quantity);
+    }, 0);
+  } else {
+    // Fallback to database cart
+    let cart = await cartModel.findOne({ user: req.user._id }).populate({
+      path: "items.product",
+      select: "price discountPrice",
+    });
 
-  // Calculate cart total
-  const totalPrice = cart.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return next(
+        new ErrorHandler(
+          "Cart is empty. Add products before applying a coupon",
+          400
+        )
+      );
+    }
+
+    // Calculate total from database cart
+    totalPrice = cart.items.reduce(
+      (sum, item) => {
+        const price = item.product.discountPrice || item.product.price;
+        return sum + (price * item.quantity);
+      },
+      0
+    );
+  }
 
   if (totalPrice < coupon.minimumOrderAmount) {
     return next(
       new ErrorHandler(
-        `Minimum order amount for this coupon is ${coupon.minimumOrderAmount}`,
+        `Minimum order amount for this coupon is ₹${coupon.minimumOrderAmount}`,
         400
       )
     );
@@ -205,17 +227,22 @@ const applyCoupon = catchAsyncErrors(async (req, res, next) => {
     discount = coupon.maximumDiscountAmount;
   }
 
-  // Update cart with discount
-  cart.discount = discount;
-  cart.totalPriceAfterDiscount = totalPrice - discount;
-  cart.coupon = coupon._id;
-
-  await cart.save();
+  // Decrease coupon usage limit
+  coupon.usageLimit -= 1;
+  await coupon.save();
 
   res.status(200).json({
     success: true,
     message: "Coupon applied successfully",
-    cart,
+    discount: discount,
+    coupon: {
+      id: coupon._id,
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+    },
+    totalPrice,
+    finalTotal: totalPrice - discount,
   });
 });
 
@@ -224,5 +251,5 @@ module.exports = {
   getAllCoupons,
   getCouponById,
   createCoupon,
-  applyCoupon
+  applyCoupon,
 };

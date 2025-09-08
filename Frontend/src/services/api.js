@@ -101,19 +101,20 @@ export const wishlistAPI = {
 
 // Orders API
 export const ordersAPI = {
-  createOrder: (formData) => api.post('/orders', formData, {
+  createOrder: (formData) => api.post('/order', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  getAllOrders: () => api.get('/orders'),
-  getOrderDetails: (id) => api.get(`/orders/${id}`),
-  updateOrderStatus: (id, status) => api.put(`/orders/${id}/status`, { status }),
+  getAllOrders: () => api.get('/order'),
+  getOrderDetails: (id) => api.get(`/order/${id}`),
+  updateOrderStatus: (id, status) => api.put(`/order/${id}/status`, { status }),
 };
 
 // Payment API
 export const paymentAPI = {
-  createRazorpayOrder: (orderData) => api.post('/payment/create-order', orderData),
+  createRazorpayOrder: (amount) => api.post('/payment/create-order', { amount }),
   verifyPayment: (paymentData) => api.post('/payment/verify', paymentData),
 };
+
 
 // User API
 export const userAPI = {
@@ -128,13 +129,15 @@ export const userAPI = {
 export const couponsAPI = {
   getAllCoupons: (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
-    return api.get(`/coupons?${queryString}`);
+    return api.get(`/coupon?${queryString}`);
   },
-  getCouponById: (id) => api.get(`/coupons/${id}`),
-  createCoupon: (couponData) => api.post('/coupons', couponData),
-  updateCoupon: (id, couponData) => api.put(`/coupons/${id}`, couponData),
-  applyCoupon: (couponData) => api.post('/coupons/apply-coupon', couponData),
+  getCouponById: (id) => api.get(`/coupon/${id}`),
+  createCoupon: (couponData) => api.post('/coupon', couponData),
+  updateCoupon: (id, couponData) => api.put(`/coupon/${id}`, couponData),
+  // Use only this for applying a coupon
+  applyCoupon: (couponCode, cartItems = null) => api.post('/coupon/apply-coupon', { couponCode, cartItems }),
 };
+
 
 // Utility functions
 export const uploadImage = async (file) => {

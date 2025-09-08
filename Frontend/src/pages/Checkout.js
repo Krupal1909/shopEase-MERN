@@ -85,27 +85,33 @@ const Checkout = () => {
     return required.every(field => shippingAddress[field].trim() !== '');
   };
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim()) {
-      toast.error('Please enter a coupon code');
-      return;
-    }
+const applyCoupon = async () => {
+  if (!couponCode.trim()) {
+    toast.error("Please enter a coupon code");
+    return;
+  }
 
-    try {
-      setLoading(true);
-      const response = await couponsAPI.validateCoupon(couponCode, cartTotal);
-      const { discount, coupon } = response.data;
-      
-      setCouponDiscount(discount);
-      setAppliedCoupon(coupon);
-      toast.success(`Coupon applied! You saved ${formatPrice(discount)}`);
-    } catch (error) {
-      const message = error.response?.data?.message || 'Invalid coupon code';
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    console.log('Applying coupon:', couponCode);
+    const response = await couponsAPI.applyCoupon(couponCode.trim(), cart);
+    console.log('Coupon response:', response.data);
+    
+    const { discount, coupon } = response.data;
+
+    setCouponDiscount(discount);
+    setAppliedCoupon(coupon);
+    toast.success(`Coupon applied! You saved ₹${discount.toFixed(2)}`);
+  } catch (error) {
+    console.error('Coupon application error:', error);
+    const message = error.response?.data?.message || error.message || "Invalid coupon code";
+    toast.error(message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   const removeCoupon = () => {
     setCouponCode('');
@@ -157,16 +163,17 @@ const Checkout = () => {
         });
       } else {
         // Razorpay Payment
-        const razorpayResponse = await paymentAPI.createRazorpayOrder(finalTotal * 100);
-        const { order: razorpayOrder } = razorpayResponse.data;
+        const razorpayResponse = await paymentAPI.createRazorpayOrder(finalTotal);
+        const razorpayOrder = razorpayResponse.data;
 
+        console.log(process.env.REACT_APP_RAZORPAY_KEY_ID, "key")
         const options = {
-          key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_1234567890',
+          key: process.env.REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_RF0Godgrm0egt5',
           amount: razorpayOrder.amount,
           currency: razorpayOrder.currency,
           name: 'ShopEase',
           description: 'Order Payment',
-          order_id: razorpayOrder.id,
+          order_id: razorpayOrder.orderId,
           prefill: {
             name: user.name,
             email: user.email,
@@ -181,7 +188,8 @@ const Checkout = () => {
               const verifyResponse = await paymentAPI.verifyPayment({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
+                razorpay_signature: response.razorpay_signature,
+                orderData: orderData 
               });
 
               if (verifyResponse.data.success) {
@@ -222,7 +230,8 @@ const Checkout = () => {
       }
     } catch (error) {
       console.error('Checkout error:', error);
-      const message = error.response?.data?.message || 'Checkout failed';
+      const message = error.response?.data?.message;
+      
       toast.error(message);
     } finally {
       setLoading(false);

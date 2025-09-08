@@ -7,6 +7,7 @@ const {
   verifyEmail,
   forgotPassword,
   googleAuth,
+  verifyAuth,
 } = require("../../controller/auth/auth.controller");
 const isAuthenticated = require("../../middleware/auth.middleware");
 const upload = require("../../middleware/multer.middleware");
@@ -28,5 +29,8 @@ router.get("/verify-email/:token", verifyEmail);
 
 // Forgot password
 router.post("/forgot-password", forgotPassword);
+
+// Verify authentication status
+router.get("/verify", isAuthenticated, verifyAuth);
 
 module.exports = router;
